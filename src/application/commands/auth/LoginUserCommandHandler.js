@@ -4,13 +4,13 @@
  */
 import { ICommandHandler } from '../ICommandHandler.js';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 
 export class LoginUserCommandHandler extends ICommandHandler {
-  constructor({ userRepository, logger }) {
+  constructor({ jwtTokenService, userRepository, logger }) {
     super();
     this.userRepository = userRepository;
     this.logger = logger;
+    this.jwtTokenService = jwtTokenService;
   }
 
   async handle(command) {
@@ -41,25 +41,16 @@ export class LoginUserCommandHandler extends ICommandHandler {
       // Generate JWT tokens
       const payload = {
         userId: user.id,
-        email: user.email,
+        email: user.email.value || user.email, // Handle both value object and string
         role: user.role
       };
 
-      const accessToken = jwt.sign(
-        payload,
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRE }
-      );
-
-      const refreshToken = jwt.sign(
-        { userId: user.id },
-        process.env.JWT_REFRESH_SECRET,
-        { expiresIn: process.env.JWT_REFRESH_EXPIRE }
-      );
+      const accessToken = this.jwtTokenService.generateAccessToken(payload);
+      const refreshToken = this.jwtTokenService.generateRefreshToken(payload);
 
       this.logger.info('User logged in successfully', { 
         userId: user.id, 
-        email: user.email 
+        email: user.email.value || user.email 
       });
 
       // Return user without password
