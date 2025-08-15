@@ -30,7 +30,7 @@ flowchart LR
   B --> F
   G --> E
   A --> H
-
+```
 
 A comprehensive inventory management system built with Node.js following Clean Architecture principles, Domain-Driven Design (DDD), and CQRS patterns.
 
