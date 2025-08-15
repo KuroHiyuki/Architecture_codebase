@@ -5,8 +5,8 @@
 import { v4 as uuidv4 } from 'uuid';
 
 export class BaseEntity {
-  constructor(id = null) {
-    this.id = id || uuidv4();
+  constructor(_id = null) {
+    this._id = _id || uuidv4();
     this.createdAt = new Date();
     this.updatedAt = new Date();
   }
@@ -19,12 +19,12 @@ export class BaseEntity {
     if (!other || other.constructor !== this.constructor) {
       return false;
     }
-    return this.id === other.id;
+    return this._id === other._id;
   }
 
   toJSON() {
     return {
-      id: this.id,
+      _id: this._id,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt
     };
