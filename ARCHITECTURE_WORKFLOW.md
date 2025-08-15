@@ -1,6 +1,6 @@
 # Sơ Đồ Workflow và Tương Tác Giữa Các Thành Phần
 
-## 🏗️ Tổng Quan Kiến Trúc
+## 🏗️ Tổng Quan Kiến Trúc với CQRS
 
 ```mermaid
 graph TB
@@ -8,6 +8,7 @@ graph TB
     subgraph "🌐 Presentation Layer"
         API[API Routes]
         CTRL[Controllers]
+        FAST_CTRL[FastReadController]
         MW[Middleware]
     end
 
@@ -16,6 +17,7 @@ graph TB
         MED[Mediator]
         CMD[Command Handlers]
         QRY[Query Handlers]
+        FAST_QRY[Fast Query Handlers]
         SVC[Application Services]
     end
 
@@ -27,37 +29,60 @@ graph TB
         DOM_SVC[Domain Services]
     end
 
-    %% Infrastructure Layer
-    subgraph "🔧 Infrastructure Layer"
-        REPO[Repositories]
-        DB[Database]
-        CACHE[Cache]
-        SEC[Security Services]
-        LOG[Logger]
+    %% Infrastructure Layer - Write Side
+    subgraph "🔧 Infrastructure Layer - Write Side"
+        REPO[Write Repositories]
+        DB[Write Database]
+        UOW[Unit of Work]
+    end
+
+    %% Infrastructure Layer - Read Side
+    subgraph "📊 Infrastructure Layer - Read Side"
+        READ_REPO[Read Repositories]
+        READ_DB[Read Database]
+        CACHE[Cache Layer]
+    end
+
+    %% Event System
+    subgraph "🔄 Event System (CQRS)"
+        EVENT_BUS[Event Bus]
+        EVENT_HANDLERS[Event Handlers]
     end
 
     %% DI Container
     DI[🏭 DI Container<br/>Awilix IoC]
 
-    %% Flow
+    %% Write Flow
     API --> MW
     MW --> CTRL
     CTRL --> MED
     MED --> CMD
-    MED --> QRY
     CMD --> REPO
-    QRY --> REPO
-    CMD --> ENT
+    CMD --> UOW
     REPO --> DB
+    
+    %% Read Flow (Fast)
+    API --> FAST_CTRL
+    FAST_CTRL --> MED
+    MED --> FAST_QRY
+    FAST_QRY --> READ_REPO
+    READ_REPO --> READ_DB
+    READ_REPO --> CACHE
+
+    %% Event Flow (CQRS Sync)
+    CMD --> EVENT_BUS
+    EVENT_BUS --> EVENT_HANDLERS
+    EVENT_HANDLERS --> READ_REPO
     
     %% DI connections
     DI -.-> CTRL
+    DI -.-> FAST_CTRL
     DI -.-> MED
     DI -.-> CMD
-    DI -.-> QRY
+    DI -.-> FAST_QRY
     DI -.-> REPO
-    DI -.-> SEC
-    DI -.-> LOG
+    DI -.-> READ_REPO
+    DI -.-> EVENT_BUS
 ```
 
 ## 🔄 Chi Tiết Workflow: Tạo Sản Phẩm
@@ -269,47 +294,128 @@ graph TB
    - Auto cleanup resources
    - Error handling và rollback
 
-## 🎯 Complete Request Flow
+## 🔄 Complete Request Flow
 
 ```mermaid
 graph TB
-    START([HTTP Request]) --> AUTH{Authentication}
-    AUTH -->|Valid| VAL{Validation}
-    AUTH -->|Invalid| UNAUTH[401 Unauthorized]
+    START([HTTP Request]) --> TYPE{Request Type?}
     
-    VAL -->|Valid| RATE{Rate Limit}
-    VAL -->|Invalid| BAD[400 Bad Request]
+    TYPE -->|Write Operation| WRITE_FLOW[Write Flow]
+    TYPE -->|Read Operation| READ_TYPE{Fast Read?}
     
-    RATE -->|OK| CTRL[Controller]
-    RATE -->|Exceeded| LIMIT[429 Too Many Requests]
+    READ_TYPE -->|Normal Read| NORMAL_READ[Normal Read Flow]
+    READ_TYPE -->|Fast Read| FAST_READ[Fast Read Flow]
     
-    CTRL --> CMD_QRY{Command or Query?}
-    
-    CMD_QRY -->|Command| CMD_FLOW[Command Flow]
-    CMD_QRY -->|Query| QRY_FLOW[Query Flow]
-    
-    subgraph "📝 Command Flow"
+    subgraph "✍️ Write Flow (CQRS Command Side)"
+        WRITE_FLOW --> AUTH1{Authentication}
+        AUTH1 -->|Valid| VAL1{Validation}
+        AUTH1 -->|Invalid| UNAUTH1[401 Unauthorized]
+        
+        VAL1 -->|Valid| RATE1{Rate Limit}
+        VAL1 -->|Invalid| BAD1[400 Bad Request]
+        
+        RATE1 -->|OK| CTRL1[Controller]
+        RATE1 -->|Exceeded| LIMIT1[429 Too Many Requests]
+        
+        CTRL1 --> CMD_FLOW[Command Processing]
         CMD_FLOW --> VALIDATE_CMD[Validate Command]
         VALIDATE_CMD --> START_TRANS[Start Transaction]
         START_TRANS --> BIZ_LOGIC[Business Logic]
-        BIZ_LOGIC --> SAVE_DATA[Save to Database]
+        BIZ_LOGIC --> SAVE_DATA[Save to Write DB]
         SAVE_DATA --> COMMIT[Commit Transaction]
-        COMMIT --> LOG_SUCCESS[Log Success]
+        COMMIT --> PUBLISH_EVENT[Publish Event]
+        PUBLISH_EVENT --> LOG_SUCCESS1[Log Success]
+        LOG_SUCCESS1 --> RESPONSE1[HTTP Response]
     end
     
-    subgraph "🔍 Query Flow"
+    subgraph "� Normal Read Flow (Write Model)"
+        NORMAL_READ --> AUTH2{Authentication}
+        AUTH2 -->|Valid| CTRL2[Controller]
+        AUTH2 -->|Invalid| UNAUTH2[401 Unauthorized]
+        
+        CTRL2 --> QRY_FLOW[Query Processing]
         QRY_FLOW --> VALIDATE_QRY[Validate Query]
-        VALIDATE_QRY --> FETCH_DATA[Fetch from Database/Cache]
-        FETCH_DATA --> FORMAT[Format Response]
+        VALIDATE_QRY --> FETCH_WRITE[Fetch from Write DB]
+        FETCH_WRITE --> FORMAT1[Format Response]
+        FORMAT1 --> RESPONSE2[HTTP Response]
     end
     
-    LOG_SUCCESS --> RESPONSE[HTTP Response]
-    FORMAT --> RESPONSE
+    subgraph "⚡ Fast Read Flow (Read Model)"
+        FAST_READ --> AUTH3{Authentication}
+        AUTH3 -->|Valid| FAST_CTRL[FastReadController]
+        AUTH3 -->|Invalid| UNAUTH3[401 Unauthorized]
+        
+        FAST_CTRL --> FAST_QRY_FLOW[Fast Query Processing]
+        FAST_QRY_FLOW --> CHECK_CACHE{Cache Hit?}
+        CHECK_CACHE -->|Hit| CACHE_RESPONSE[Return Cached Data]
+        CHECK_CACHE -->|Miss| FETCH_READ[Fetch from Read DB]
+        FETCH_READ --> UPDATE_CACHE[Update Cache]
+        UPDATE_CACHE --> FORMAT2[Format Response]
+        CACHE_RESPONSE --> RESPONSE3[HTTP Response]
+        FORMAT2 --> RESPONSE3
+    end
     
-    RESPONSE --> END([Client Response])
+    subgraph "🔄 Event Processing (Background)"
+        PUBLISH_EVENT --> EVENT_BUS[Event Bus Queue]
+        EVENT_BUS --> PROCESS_EVENT[Process Event]
+        PROCESS_EVENT --> UPDATE_READ[Update Read Model]
+        UPDATE_READ --> CLEAR_CACHE[Clear Related Cache]
+    end
+    
+    RESPONSE1 --> END1([Client Response])
+    RESPONSE2 --> END2([Client Response])
+    RESPONSE3 --> END3([Client Response])
+```
+
+## 🎯 CQRS Event-Driven Synchronization
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant WriteAPI as Write API
+    participant WriteDB as Write Database
+    participant EventBus as Event Bus
+    participant EventHandler as Event Handler
+    participant ReadDB as Read Database
+    participant Cache
+    participant ReadAPI as Read API (Fast)
+
+    Note over Client, ReadAPI: Write Operation Flow
+    Client->>WriteAPI: POST /api/products (Create Product)
+    WriteAPI->>WriteDB: Save to normalized tables
+    WriteDB-->>WriteAPI: Product saved
+    WriteAPI->>EventBus: Publish ProductCreated event
+    WriteAPI-->>Client: 201 Created
+
+    Note over EventBus, ReadDB: Background Sync (Async)
+    EventBus->>EventHandler: Process ProductCreated event
+    EventHandler->>ReadDB: Update denormalized read model
+    EventHandler->>Cache: Clear related cache
+    
+    Note over Client, ReadAPI: Read Operation Flow (Later)
+    Client->>ReadAPI: GET /api/fast/products
+    ReadAPI->>Cache: Check cache
+    Cache-->>ReadAPI: Cache miss
+    ReadAPI->>ReadDB: Query denormalized data
+    ReadDB-->>ReadAPI: Fast results (no joins)
+    ReadAPI->>Cache: Update cache
+    ReadAPI-->>Client: 200 OK (Fast response)
+    
+    Note over Client, ReadAPI: Subsequent Read (Cache Hit)
+    Client->>ReadAPI: GET /api/fast/products
+    ReadAPI->>Cache: Check cache
+    Cache-->>ReadAPI: Cache hit
+    ReadAPI-->>Client: 200 OK (Very fast response)
 ```
 
 ## 📊 Architecture Benefits
+
+### ✅ CQRS (Command Query Responsibility Segregation)
+- **Separate Read/Write Models**: Tối ưu riêng biệt cho từng loại operation
+- **Read Model Denormalization**: Data được flatten để queries nhanh hơn
+- **Independent Scaling**: Scale read và write operations độc lập
+- **Event-Driven Sync**: Read models được sync qua events từ write models
+- **Performance**: Read operations có thể nhanh gấp 2-10x so với write model
 
 ### ✅ Clean Architecture
 - **Separation of Concerns**: Mỗi layer có trách nhiệm rõ ràng
@@ -324,7 +430,8 @@ graph TB
 - **Dependency Inversion**: High-level modules không depend vào low-level
 
 ### ✅ Design Patterns
-- **CQRS**: Tách biệt read/write operations
+- **CQRS**: Tách biệt read/write operations với models riêng
+- **Event Sourcing**: Event-driven synchronization
 - **Mediator**: Decoupling giữa controllers và handlers
 - **Repository**: Abstraction cho data access
 - **Unit of Work**: Transaction management
@@ -334,5 +441,33 @@ graph TB
 - **Modular Design**: Dễ dàng thêm features mới
 - **Error Handling**: Centralized error management
 - **Logging**: Comprehensive monitoring
-- **Caching**: Performance optimization
+- **Caching**: Performance optimization với multiple layers
 - **Security**: Authentication, authorization, rate limiting
+- **Performance**: Read model có thể cache aggressive hơn write model
+
+## 🚀 CQRS Performance Benefits
+
+### Read Model Advantages:
+1. **Denormalized Data**: Giảm joins, faster queries
+2. **Optimized Indexes**: Indexes được tối ưu cho read patterns
+3. **Aggressive Caching**: Cache được longer vì read-only
+4. **Separate Database**: Có thể dùng read replicas hoặc different DB
+5. **Text Search**: Full-text indexes cho search performance
+
+### API Endpoints Comparison:
+
+**Write Model (Normalized):**
+- `GET /api/products` - Standard queries từ write database
+- `GET /api/inventory` - Complex joins và calculations
+
+**Read Model (Denormalized):**
+- `GET /api/fast/products` - Pre-calculated, cached results
+- `GET /api/fast/inventory/analytics/summary` - Pre-aggregated data
+- `GET /api/fast/products/search` - Optimized text search
+- `GET /api/fast/performance/compare` - Performance comparison
+
+### Performance Metrics Expected:
+- **Read Speed**: 2-10x faster than write model
+- **Cache Hit Rate**: 80-95% for read model
+- **Search Performance**: 5-20x faster với text indexes
+- **Analytics Queries**: 10-100x faster với pre-aggregated data

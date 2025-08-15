@@ -9,6 +9,15 @@ import { Logger } from '../shared/Logger.js';
 import { MongoDatabase } from '../infrastructure/database/MongoDatabase.js';
 import { UnitOfWork } from '../infrastructure/database/UnitOfWork.js';
 
+// Read Store (CQRS)
+import { ReadDatabase } from '../infrastructure/readStore/ReadDatabase.js';
+import { ProductReadRepository } from '../infrastructure/readStore/repositories/ProductReadRepository.js';
+import { InventoryReadRepository } from '../infrastructure/readStore/repositories/InventoryReadRepository.js';
+
+// Event System
+import { EventBus } from '../infrastructure/events/EventBus.js';
+import { ReadModelEventHandlers } from '../infrastructure/events/ReadModelEventHandlers.js';
+
 // Repositories
 import { UserRepository } from '../infrastructure/repositories/UserRepository.js';
 import { ProductRepository } from '../infrastructure/repositories/ProductRepository.js';
@@ -24,6 +33,7 @@ import { CacheService } from '../infrastructure/cache/CacheService.js';
 // Application services
 import { Mediator } from '../application/Mediator.js';
 import { LogService } from '../application/services/LogService.js';
+import { CQRSSyncService } from '../application/services/CQRSSyncService.js';
 
 // Command handlers
 import { RegisterUserCommandHandler } from '../application/commands/auth/RegisterUserCommandHandler.js';
@@ -45,6 +55,12 @@ import { GetInventoryByIdQueryHandler } from '../application/queries/inventory/G
 import { GetInventoryQueryHandler } from '../application/queries/inventory/GetInventoryQueryHandler.js';
 import { GetLowStockItemsQueryHandler } from '../application/queries/inventory/GetLowStockItemsQueryHandler.js';
 
+// Fast Query Handlers (CQRS Read Model)
+import { FastGetProductsQueryHandler } from '../application/queries/readModel/FastGetProductsQueryHandler.js';
+import { FastSearchProductsQueryHandler } from '../application/queries/readModel/FastSearchProductsQueryHandler.js';
+import { FastGetProductByIdQueryHandler } from '../application/queries/readModel/FastGetProductByIdQueryHandler.js';
+import { FastInventoryAnalyticsQueryHandler } from '../application/queries/readModel/FastInventoryAnalyticsQueryHandler.js';
+
 // Middleware
 import { AuthenticationMiddleware } from '../presentation/middleware/AuthenticationMiddleware.js';
 import { ValidationMiddleware } from '../presentation/middleware/ValidationMiddleware.js';
@@ -56,6 +72,8 @@ import { AuthController } from '../presentation/controllers/AuthController.js';
 import { ProductController } from '../presentation/controllers/ProductController.js';
 import { InventoryController } from '../presentation/controllers/InventoryController.js';
 import { LogController } from '../presentation/controllers/LogController.js';
+import { FastReadController } from '../presentation/controllers/FastReadController.js';
+import { CQRSSyncController } from '../presentation/controllers/CQRSSyncController.js';
 
 export class DIContainer {
   constructor() {
@@ -71,12 +89,21 @@ export class DIContainer {
       
       // Database
       database: asClass(MongoDatabase).singleton(),
+      readDatabase: asClass(ReadDatabase).singleton(),
       unitOfWork: asClass(UnitOfWork).singleton(),
       
-      // Repositories
+      // Event System (CQRS)
+      eventBus: asClass(EventBus).singleton(),
+      readModelEventHandlers: asClass(ReadModelEventHandlers).singleton(),
+      
+      // Write Repositories (Write Model)
       userRepository: asClass(UserRepository).scoped(),
       productRepository: asClass(ProductRepository).scoped(),
       inventoryRepository: asClass(InventoryRepository).scoped(),
+      
+      // Read Repositories (Read Model)
+      productReadRepository: asClass(ProductReadRepository).scoped(),
+      inventoryReadRepository: asClass(InventoryReadRepository).scoped(),
       
       // Security services
       jwtTokenService: asClass(JwtTokenService).singleton(),
@@ -88,6 +115,7 @@ export class DIContainer {
       // Application services
       mediator: asClass(Mediator).singleton(),
       logService: asClass(LogService).singleton(),
+      cqrsSyncService: asClass(CQRSSyncService).singleton(),
       
       // Command handlers
       registerUserCommandHandler: asClass(RegisterUserCommandHandler).scoped(),
@@ -102,12 +130,18 @@ export class DIContainer {
       deleteInventoryCommandHandler: asClass(DeleteInventoryCommandHandler).scoped(),
       adjustInventoryCommandHandler: asClass(AdjustInventoryCommandHandler).scoped(),
       
-      // Query handlers
+      // Query handlers (Write Model)
       getProductByIdQueryHandler: asClass(GetProductByIdQueryHandler).scoped(),
       getProductsQueryHandler: asClass(GetProductsQueryHandler).scoped(),
       getInventoryByIdQueryHandler: asClass(GetInventoryByIdQueryHandler).scoped(),
       getInventoryQueryHandler: asClass(GetInventoryQueryHandler).scoped(),
       getLowStockItemsQueryHandler: asClass(GetLowStockItemsQueryHandler).scoped(),
+      
+      // Fast Query Handlers (Read Model - CQRS)
+      fastGetProductsQueryHandler: asClass(FastGetProductsQueryHandler).scoped(),
+      fastSearchProductsQueryHandler: asClass(FastSearchProductsQueryHandler).scoped(),
+      fastGetProductByIdQueryHandler: asClass(FastGetProductByIdQueryHandler).scoped(),
+      fastInventoryAnalyticsQueryHandler: asClass(FastInventoryAnalyticsQueryHandler).scoped(),
       
       // Middleware
       authMiddleware: asClass(AuthenticationMiddleware).singleton(),
@@ -119,11 +153,16 @@ export class DIContainer {
       authController: asClass(AuthController).scoped(),
       productController: asClass(ProductController).scoped(),
       inventoryController: asClass(InventoryController).scoped(),
-      logController: asClass(LogController).scoped()
+      logController: asClass(LogController).scoped(),
+      fastReadController: asClass(FastReadController).scoped(),
+      cqrsSyncController: asClass(CQRSSyncController).scoped()
     });
 
     // Register command and query handlers with mediator
     this.registerMediatorHandlers();
+    
+    // Setup event handlers for CQRS
+    this.setupEventHandlers();
   }
 
   registerMediatorHandlers() {
@@ -185,7 +224,7 @@ export class DIContainer {
       this.container.resolve('adjustInventoryCommandHandler')
     );
 
-    // Register query handlers
+    // Register query handlers (Write Model)
     mediator.registerQueryHandler(
       'GetProductByIdQuery',
       this.container.resolve('getProductByIdQueryHandler')
@@ -210,6 +249,43 @@ export class DIContainer {
       'GetLowStockItemsQuery',
       this.container.resolve('getLowStockItemsQueryHandler')
     );
+
+    // Register fast query handlers (Read Model - CQRS)
+    mediator.registerQueryHandler(
+      'FastGetProductsQuery',
+      this.container.resolve('fastGetProductsQueryHandler')
+    );
+
+    mediator.registerQueryHandler(
+      'FastSearchProductsQuery',
+      this.container.resolve('fastSearchProductsQueryHandler')
+    );
+
+    mediator.registerQueryHandler(
+      'FastGetProductByIdQuery',
+      this.container.resolve('fastGetProductByIdQueryHandler')
+    );
+
+    mediator.registerQueryHandler(
+      'FastInventoryAnalyticsQuery',
+      this.container.resolve('fastInventoryAnalyticsQueryHandler')
+    );
+  }
+
+  setupEventHandlers() {
+    const eventBus = this.container.resolve('eventBus');
+    const eventHandlers = this.container.resolve('readModelEventHandlers');
+    
+    // Register all event handlers
+    const handlers = eventHandlers.getEventHandlers();
+    
+    for (const [eventType, handler] of Object.entries(handlers)) {
+      eventBus.subscribe(eventType, handler);
+    }
+
+    this.container.resolve('logger').info('Event handlers registered for CQRS read model sync', {
+      eventTypes: Object.keys(handlers)
+    });
   }
 
   resolve(name) {
