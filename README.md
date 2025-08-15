@@ -1,5 +1,36 @@
 # Clean Architecture Inventory Management System
 
+```mermaid
+flowchart LR
+  subgraph Presentation
+    A[API Gateway / Express App<br/>(presentation/Application.js)]
+    B[Controllers & Routes]
+  end
+
+  subgraph Application_Layer
+    C[Commands / Queries / Mediator]
+  end
+
+  subgraph Domain_Layer
+    D[Entities / Value Objects / Domain Services]
+  end
+
+  subgraph Infrastructure
+    E[Repositories (MongoDB via Mongoose)]
+    F[Auth Services (JWT, Google OAuth)]
+    G[Background Workers / Queues]
+    H[Logging & Monitoring (Winston, Metrics)]
+  end
+
+  A --> B
+  B --> C
+  C --> D
+  C --> E
+  E --> D
+  B --> F
+  G --> E
+  A --> H
+
 A comprehensive inventory management system built with Node.js following Clean Architecture principles, Domain-Driven Design (DDD), and CQRS patterns.
 
 ## 🏗️ Architecture Overview
