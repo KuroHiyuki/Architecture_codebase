@@ -2,6 +2,7 @@
  * Authentication Controller
  * Handles user authentication endpoints
  */
+import { ResponseHelper } from '../../shared/ResponseHelper.js';
 export class AuthController {
   constructor({ mediator, logger }) {
     this.mediator = mediator;
@@ -25,13 +26,7 @@ export class AuthController {
         email: req.body.email,
         userId: result.data.id 
       });
-
-      res.status(201).json({
-        success: true,
-        message: 'User registered successfully',
-        data: result.data
-      });
-
+      return ResponseHelper.created(res, result.data, 'User registered successfully');
     } catch (error) {
       next(error);
     }
@@ -52,12 +47,7 @@ export class AuthController {
         email: req.body.email,
         userId: result.data.user.id 
       });
-
-      res.status(200).json({
-        success: true,
-        message: 'Login successful',
-        data: result.data
-      });
+      return ResponseHelper.success(res, result.data, 'Login successful');
 
     } catch (error) {
       next(error);
@@ -73,10 +63,7 @@ export class AuthController {
         email: req.user?.email 
       });
 
-      res.status(200).json({
-        success: true,
-        message: 'Logout successful'
-      });
+      return ResponseHelper.success(res, null, 'Logout successful');
 
     } catch (error) {
       next(error);
@@ -102,11 +89,7 @@ export class AuthController {
         userId: result.data.user.id 
       });
 
-      res.status(200).json({
-        success: true,
-        message: 'Google authentication successful',
-        data: result.data
-      });
+      return ResponseHelper.success(res, result.data, 'Google authentication successful');
 
     } catch (error) {
       next(error);
@@ -118,26 +101,16 @@ export class AuthController {
       const { refreshToken } = req.body;
 
       if (!refreshToken) {
-        return res.status(400).json({
-          type: 'https://tools.ietf.org/html/rfc7807',
-          title: 'Bad Request',
-          status: 400,
-          detail: 'Refresh token is required',
-          instance: req.originalUrl
-        });
+        return ResponseHelper.badRequest(res, 'Refresh token is required', null, req.originalUrl);
       }
 
       // This would be handled by a refresh token command/handler
       // For now, we'll return a placeholder response
-      res.status(200).json({
-        success: true,
-        message: 'Token refreshed successfully',
-        data: {
-          accessToken: 'new-access-token',
-          refreshToken: 'new-refresh-token'
-        }
-      });
-
+      return ResponseHelper.success(res, {
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token'
+      }, 'Token refreshed successfully');
+           
     } catch (error) {
       next(error);
     }
@@ -146,12 +119,8 @@ export class AuthController {
   async getProfile(req, res, next) {
     try {
       const user = req.user;
-
-      res.status(200).json({
-        success: true,
-        message: 'Profile retrieved successfully',
-        data: {
-          id: user.id,
+        const data = {
+            id: user.id,
           email: user.email.value,
           firstName: user.firstName,
           lastName: user.lastName,
@@ -161,7 +130,7 @@ export class AuthController {
           lastLoginAt: user.lastLoginAt,
           createdAt: user.createdAt
         }
-      });
+     return ResponseHelper.success(res, data, 'User profile retrieved successfully');
 
     } catch (error) {
       next(error);
@@ -180,19 +149,15 @@ export class AuthController {
         userId: user.id,
         email: user.email.value 
       });
-
-      res.status(200).json({
-        success: true,
-        message: 'Profile updated successfully',
-        data: {
-          id: user.id,
+      const data = {
+        id: user.id,
           email: user.email.value,
           firstName: user.firstName,
           lastName: user.lastName,
           fullName: user.fullName,
           updatedAt: user.updatedAt
-        }
-      });
+      }
+      return ResponseHelper.noContent(res, 'Profile updated successfully');
 
     } catch (error) {
       next(error);

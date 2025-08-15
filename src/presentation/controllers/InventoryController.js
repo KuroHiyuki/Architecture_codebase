@@ -2,6 +2,7 @@
  * Inventory Controller
  * Handles inventory management endpoints
  */
+import { ResponseHelper } from '../../shared/ResponseHelper.js';
 export class InventoryController {
   constructor({ mediator, logger }) {
     this.mediator = mediator;
@@ -29,12 +30,7 @@ export class InventoryController {
         productId: result.data.productId,
         userId: req.user.id
       });
-
-      res.status(201).json({
-        success: true,
-        message: 'Inventory created successfully',
-        data: result.data
-      });
+      return ResponseHelper.created(res, result.data, 'Inventory created successfully');
 
     } catch (error) {
       next(error);
@@ -56,13 +52,8 @@ export class InventoryController {
       });
 
       const result = await this.mediator.query(query);
-
-      res.status(200).json({
-        success: true,
-        message: 'Inventory retrieved successfully',
-        data: result.data,
-        pagination: result.pagination
-      });
+      return ResponseHelper.success(res, result.data, 'Inventory retrieved successfully');
+    
 
     } catch (error) {
       next(error);
@@ -75,14 +66,7 @@ export class InventoryController {
       const { id } = req.params;
 
       // Placeholder for actual query implementation
-      res.status(200).json({
-        success: true,
-        message: 'Inventory item retrieved successfully',
-        data: {
-          id,
-          // ... inventory data
-        }
-      });
+      return ResponseHelper.success(res, { id }, 'Inventory item retrieved successfully');
 
     } catch (error) {
       next(error);
@@ -108,12 +92,7 @@ export class InventoryController {
         quantity: req.body.quantity,
         userId: req.user.id
       });
-
-      res.status(200).json({
-        success: true,
-        message: 'Inventory stock updated successfully',
-        data: result.data
-      });
+      return ResponseHelper.noContent(res, 'Inventory stock updated successfully');
 
     } catch (error) {
       next(error);
@@ -136,12 +115,7 @@ export class InventoryController {
         quantity: req.body.quantity,
         userId: req.user.id
       });
-
-      res.status(200).json({
-        success: true,
-        message: 'Inventory stock reserved successfully',
-        data: result.data
-      });
+      return ResponseHelper.success(res, result.data, 'Inventory stock reserved successfully');    
 
     } catch (error) {
       next(error);
@@ -160,10 +134,7 @@ export class InventoryController {
         userId: req.user.id
       });
 
-      res.status(200).json({
-        success: true,
-        message: 'Inventory reservation released successfully'
-      });
+      return ResponseHelper.success(res, null, 'Inventory reservation released successfully');
 
     } catch (error) {
       next(error);
@@ -182,13 +153,7 @@ export class InventoryController {
       });
 
       const result = await this.mediator.query(query);
-
-      res.status(200).json({
-        success: true,
-        message: 'Low stock items retrieved successfully',
-        data: result.data,
-        pagination: result.pagination
-      });
+      return ResponseHelper.paginated(res, result.data, result.pagination, 'Low stock items retrieved successfully');
 
     } catch (error) {
       next(error);
@@ -207,13 +172,7 @@ export class InventoryController {
       });
 
       const result = await this.mediator.query(query);
-
-      res.status(200).json({
-        success: true,
-        message: 'Over stock items retrieved successfully',
-        data: result.data,
-        pagination: result.pagination
-      });
+      return ResponseHelper.paginated(res, result.data, result.pagination, 'Over stock items retrieved successfully');
 
     } catch (error) {
       next(error);
@@ -231,13 +190,7 @@ export class InventoryController {
       });
 
       const result = await this.mediator.query(query);
-
-      res.status(200).json({
-        success: true,
-        message: 'Product inventory retrieved successfully',
-        data: result.data,
-        pagination: result.pagination
-      });
+      return ResponseHelper.paginated(res, result.data, result.pagination, 'Product inventory retrieved successfully');
 
     } catch (error) {
       next(error);
@@ -255,13 +208,7 @@ export class InventoryController {
       });
 
       const result = await this.mediator.query(query);
-
-      res.status(200).json({
-        success: true,
-        message: 'Warehouse inventory retrieved successfully',
-        data: result.data,
-        pagination: result.pagination
-      });
+      return ResponseHelper.paginated(res, result.data, result.pagination, 'Warehouse inventory retrieved successfully');     
 
     } catch (error) {
       next(error);
@@ -277,11 +224,7 @@ export class InventoryController {
         inventoryId: id,
         userId: req.user.id
       });
-
-      res.status(200).json({
-        success: true,
-        message: 'Inventory deleted successfully'
-      });
+      return ResponseHelper.noContent(res, 'Inventory deleted successfully');
 
     } catch (error) {
       next(error);

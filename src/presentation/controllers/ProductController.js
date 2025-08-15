@@ -2,6 +2,7 @@
  * Product Controller
  * Handles product management endpoints
  */
+import { ResponseHelper } from '../../shared/ResponseHelper.js';
 export class ProductController {
   constructor({ mediator, logger }) {
     this.mediator = mediator;
@@ -30,12 +31,7 @@ export class ProductController {
         sku: result.data.sku,
         userId: req.user.id
       });
-
-      res.status(201).json({
-        success: true,
-        message: 'Product created successfully',
-        data: result.data
-      });
+      return ResponseHelper.created(res, result.data, 'Product created successfully');
 
     } catch (error) {
       next(error);
@@ -53,20 +49,9 @@ export class ProductController {
       const result = await this.mediator.query(query);
 
       if (!result) {
-        return res.status(404).json({
-          type: 'https://tools.ietf.org/html/rfc7807',
-          title: 'Not Found',
-          status: 404,
-          detail: 'Product not found',
-          instance: req.originalUrl
-        });
+        return ResponseHelper.notFound(res, 'Product not found', req.originalUrl);
       }
-
-      res.status(200).json({
-        success: true,
-        message: 'Product retrieved successfully',
-        data: result
-      });
+      return ResponseHelper.success(res, result, 'Product retrieved successfully');
 
     } catch (error) {
       next(error);
@@ -90,13 +75,7 @@ export class ProductController {
       });
 
       const result = await this.mediator.query(query);
-
-      res.status(200).json({
-        success: true,
-        message: 'Products retrieved successfully',
-        data: result.data,
-        pagination: result.pagination
-      });
+      return ResponseHelper.paginated(res, result.data, result.pagination, 'Products retrieved successfully');
 
     } catch (error) {
       next(error);
@@ -121,25 +100,14 @@ export class ProductController {
       const result = await this.mediator.send(command);
 
       if (!result) {
-        return res.status(404).json({
-          type: 'https://tools.ietf.org/html/rfc7807',
-          title: 'Not Found',
-          status: 404,
-          detail: 'Product not found',
-          instance: req.originalUrl
-        });
+        return ResponseHelper.notFound(res, 'Product not found', req.originalUrl);
       }
 
       this.logger.info('Product updated successfully', { 
         productId: req.params.id,
         userId: req.user.id
       });
-
-      res.status(200).json({
-        success: true,
-        message: 'Product updated successfully',
-        data: result.data
-      });
+      return ResponseHelper.noContent(res, 'Product updated successfully');
 
     } catch (error) {
       next(error);
@@ -157,13 +125,7 @@ export class ProductController {
       const result = await this.mediator.send(command);
 
       if (!result) {
-        return res.status(404).json({
-          type: 'https://tools.ietf.org/html/rfc7807',
-          title: 'Not Found',
-          status: 404,
-          detail: 'Product not found',
-          instance: req.originalUrl
-        });
+        return ResponseHelper.notFound(res, 'Product not found', req.originalUrl);
       }
 
       this.logger.info('Product deleted successfully', { 
@@ -171,10 +133,7 @@ export class ProductController {
         userId: req.user.id
       });
 
-      res.status(200).json({
-        success: true,
-        message: 'Product deleted successfully'
-      });
+      return ResponseHelper.noContent(res, 'Product deleted successfully');
 
     } catch (error) {
       next(error);
@@ -194,12 +153,8 @@ export class ProductController {
 
       const result = await this.mediator.query(query);
 
-      res.status(200).json({
-        success: true,
-        message: 'Products retrieved successfully',
-        data: result.data,
-        pagination: result.pagination
-      });
+      return ResponseHelper.paginated(res, result.data, result.pagination, 'Products retrieved successfully');
+    
 
     } catch (error) {
       next(error);
@@ -224,12 +179,7 @@ export class ProductController {
 
       const result = await this.mediator.query(query);
 
-      res.status(200).json({
-        success: true,
-        message: 'Search results retrieved successfully',
-        data: result.data,
-        pagination: result.pagination
-      });
+      return ResponseHelper.paginated(res, result.data, result.pagination, 'Search results retrieved successfully');
 
     } catch (error) {
       next(error);

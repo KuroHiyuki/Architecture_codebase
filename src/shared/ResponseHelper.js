@@ -2,9 +2,10 @@
  * Response Helper
  * Standardized response formatting following RFC 7807
  */
+import {Code} from './responseCode.js';
 export class ResponseHelper {
   // Success responses
-  static success(res, data, message = 'Operation successful', statusCode = 200) {
+  static success(res, data, message = Code.Success.message, statusCode = Code.Success.status) {
     return res.status(statusCode).json({
       success: true,
       message,
@@ -13,12 +14,12 @@ export class ResponseHelper {
     });
   }
 
-  static created(res, data, message = 'Resource created successfully') {
-    return this.success(res, data, message, 201);
+  static created(res, data, message = Code.Created.message) {
+    return this.success(res, data, message, Code.Created.status);
   }
 
-  static noContent(res, message = 'Operation completed successfully') {
-    return res.status(204).json({
+  static noContent(res, message = Code.NoContent.message) {
+    return res.status(Code.NoContent.status).json({
       success: true,
       message,
       timestamp: new Date().toISOString()
@@ -26,8 +27,8 @@ export class ResponseHelper {
   }
 
   // Paginated response
-  static paginated(res, data, pagination, message = 'Data retrieved successfully') {
-    return res.status(200).json({
+  static paginated(res, data, pagination, message = Code.Success.message) {
+    return res.status(Code.Success.status).json({
       success: true,
       message,
       data,
@@ -45,8 +46,8 @@ export class ResponseHelper {
 
   // Error responses following RFC 7807
   static error(res, {
-    statusCode = 500,
-    title = 'Internal Server Error',
+    statusCode = Code.InternalServerError.status,
+    title = Code.InternalServerError.message,
     detail = 'An unexpected error occurred',
     type = 'https://tools.ietf.org/html/rfc7807',
     instance = null,
@@ -68,9 +69,9 @@ export class ResponseHelper {
     return res.status(statusCode).json(errorResponse);
   }
 
-  static badRequest(res, detail = 'Bad request', errors = null, instance = null) {
+  static badRequest(res, detail = Code.BadRequest.message, errors = null, instance = null) {
     return this.error(res, {
-      statusCode: 400,
+      statusCode: Code.BadRequest.status,
       title: 'Bad Request',
       detail,
       errors,
@@ -78,45 +79,45 @@ export class ResponseHelper {
     });
   }
 
-  static unauthorized(res, detail = 'Unauthorized access', instance = null) {
+  static unauthorized(res, detail = Code.Unauthorized.message, instance = null) {
     return this.error(res, {
-      statusCode: 401,
+      statusCode: Code.Unauthorized.status,
       title: 'Unauthorized',
       detail,
       instance
     });
   }
 
-  static forbidden(res, detail = 'Access forbidden', instance = null) {
+  static forbidden(res, detail = Code.Forbidden.message, instance = null) {
     return this.error(res, {
-      statusCode: 403,
+      statusCode: Code.Forbidden.status,
       title: 'Forbidden',
       detail,
       instance
     });
   }
 
-  static notFound(res, detail = 'Resource not found', instance = null) {
+  static notFound(res, detail = Code.NotFound.message, instance = null) {
     return this.error(res, {
-      statusCode: 404,
+      statusCode: Code.NotFound.status,
       title: 'Not Found',
       detail,
       instance
     });
   }
 
-  static conflict(res, detail = 'Resource conflict', instance = null) {
+  static conflict(res, detail = Code.Conflict.message, instance = null) {
     return this.error(res, {
-      statusCode: 409,
+      statusCode: Code.Conflict.status,
       title: 'Conflict',
       detail,
       instance
     });
   }
 
-  static unprocessableEntity(res, detail = 'Unprocessable entity', errors = null, instance = null) {
+  static unprocessableEntity(res, detail = Code.UnprocessableEntity.message, errors = null, instance = null) {
     return this.error(res, {
-      statusCode: 422,
+      statusCode: Code.UnprocessableEntity.status,
       title: 'Unprocessable Entity',
       detail,
       errors,
@@ -124,18 +125,18 @@ export class ResponseHelper {
     });
   }
 
-  static tooManyRequests(res, detail = 'Too many requests', instance = null) {
+  static tooManyRequests(res, detail = Code.TooManyRequests.message, instance = null) {
     return this.error(res, {
-      statusCode: 429,
+      statusCode: Code.TooManyRequests.status,
       title: 'Too Many Requests',
       detail,
       instance
     });
   }
 
-  static internalServerError(res, detail = 'Internal server error', instance = null, traceId = null) {
+  static internalServerError(res, detail = Code.InternalServerError.message, instance = null, traceId = null) {
     return this.error(res, {
-      statusCode: 500,
+      statusCode: Code.InternalServerError.status,
       title: 'Internal Server Error',
       detail,
       instance,
@@ -148,7 +149,7 @@ export class ResponseHelper {
     const formattedErrors = Array.isArray(errors) ? errors : [errors];
     
     return this.error(res, {
-      statusCode: 400,
+      statusCode: Code.ValidationError.status,
       title: 'Validation Error',
       detail: 'Input validation failed',
       errors: formattedErrors,
@@ -157,7 +158,7 @@ export class ResponseHelper {
   }
 
   // Business logic error response
-  static businessError(res, detail, statusCode = 400, instance = null) {
+  static businessError(res, detail, statusCode = Code.BadRequest.status, instance = null) {
     return this.error(res, {
       statusCode,
       title: 'Business Logic Error',
@@ -182,7 +183,7 @@ export class ResponseHelper {
 
   // API info response
   static apiInfo(res) {
-    return res.status(200).json({
+    return res.status(Code.Success.status).json({
       name: 'Inventory Management API',
       version: process.env.npm_package_version || '1.0.0',
       description: 'Clean Architecture Inventory Management System',
